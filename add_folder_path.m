@@ -1,0 +1,13 @@
+addpath('shared');
+addpath('case_hex_circle');
+addpath('case_hex_star');
+addpath('case_hex_triangle');
+addpath('case_mono_circle');
+addpath('case_mono_star');
+addpath('case_mono_triangle');
+addpath('case_orth_circle');
+addpath('case_orth_star');
+addpath('case_orth_triangle');
+addpath('case_square_circle');
+addpath('case_square_star');
+addpath('case_square_triangle');
