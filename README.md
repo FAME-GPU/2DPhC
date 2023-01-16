@@ -1,8 +1,8 @@
-# 2DPhC-MATLAB 
-The goal of 2DPhC-MATLAB is to solve the energy band of 2D anisotropic photonic-crystal fibers and get the accurate information of its energy band as soon as possible. 
+# 2DPhC
+The goal of 2DPhC is to solve the energy band of 2D anisotropic photonic-crystal fibers and get the accurate information of its energy band as soon as possible. 
 
 # Installation
-Download 2DPhC-MATLAB from Github.
+Download 2DPhC from Github.
 
 # Operating Instructions:
 (1) First, open and just run add_folder_path.m.
