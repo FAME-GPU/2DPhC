@@ -22,7 +22,7 @@ k_grid_num: NO of points in each Brillouin segment;
 eps1: Permittivity tensor;
 mu1: Permeability tensor;
 
-(2) Finally, just run case_XXX_XXX.m to compute the band structure.  
+ (3) Finally, just run case_XXX_XXX.m to compute the band structure.   File "eigs_2D_PhC_nssep.m" in the "shared" is used to generate Table 3.
 
 # Support:
 If you have any questions, please let us know, we are willing to help you.  
