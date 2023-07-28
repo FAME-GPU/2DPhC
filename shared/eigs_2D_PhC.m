@@ -1,6 +1,5 @@
-function [V, omega, iter_number] = eigs_2D_PhC_modified(kx, ky, numerator, grid_nums, epsinv_array, ...
-                                                        muz_array, N_wanted, opts)
-                                  
+function [V, omega, iter_number, cpu_time] = eigs_2D_PhC(kx, ky, numerator, grid_nums, epsinv_array, ...
+                                                        muz_array, N_wanted, opts)                                
 
 % solve the Helmholtz eigenvalue problems for the TE or TM waves
 % kx = dot(k,a1) and ky = dot(k,a2) must be provided
@@ -12,7 +11,7 @@ function [V, omega, iter_number] = eigs_2D_PhC_modified(kx, ky, numerator, grid_
 % if SEP_flag = true, then output of V is the periodic part of the eigenvectors of 
 % B^{-1/2}*A*B^{-1/2} instead of the GEP Av = \lambda Bv
 % default is periodic_flag = false, and output of V is eigenvectors of the GEP Av = \lambda Bv
- 
+
 global iter_count
 iter_count = 0;
 
@@ -59,43 +58,74 @@ if any(abs(epsinv_array(:,3)) > 1.0e-14)
    A  = A + (A3 + A3')/4.0;  clear A3;
 end
 
-if abs(expikx-1.0) < 1.0e-14 && abs(expiky-1.0) < 1.0e-14
-  gammaflag = 1;  
-  trB = sum(muz_array);
-  %[R,flag,~] = chol(A,'vector'); if flag ~=0, warning('A is HPSD!'); end
-  [R,flag,p] = chol(A(1:end-1,1:end-1),'vector');
-  p = p(:);
-  if flag ~=0, flag, error('hat A is not HPD!'); end
-  B_hat_vec = muz_array(1:end-1)/trB;   
-  B_fun = @(x) B_times_vec(x , muz_array(p), B_hat_vec(p) );
-else
-  gammaflag = 0;
-  [R,flag,p] = chol(A,'vector'); 
-  if flag ~=0, flag, error('A is not HPD!'); end
-  p = p(:);  
-  B_fun = @(x) B_times_vec(x , muz_array(p) );
-end
+  B_sqrt = spdiags(1.0./sqrt(muz_array(:)), 0, N, N);
+  A_scaled = B_sqrt * A * B_sqrt;  clear B_sqrt;
+  A_scaled = (A_scaled + A_scaled')/2.0;   % save A.mat A_scaled;   
 
-V = zeros(N-gammaflag, N_wanted-gammaflag);
-[V(p,:), ew, flag] = eigs(B_fun, N-gammaflag, R, N_wanted-gammaflag, 'lm', 'Tolerance', opts.tol,...
-                     'MaxIterations', opts.maxit, 'IsFunctionSymmetric', opts.issym , ...
-                     'SubspaceDimension', opts.dim, 'IsSymmetricDefinite', true, 'IsCholesky', true);
+
+if abs(expikx-1.0) < 1.0e-14 && abs(expiky-1.0) < 1.0e-14
+    gammaflag = 1;
+  trB = sum(muz_array); 
+  v_null = sqrt(muz_array(:));
+  B_sqrt = spdiags(1.0./v_null, 0, N, N);
+  A_scaled = B_sqrt * A * B_sqrt;  clear B_sqrt;
+  A_scaled = (A_scaled + A_scaled')/2.0;   % save A.mat A_scaled;   
+  [R, flag, p] = chol(A_scaled,'vector');   v_null = v_null(p);
+  A_truncated = A_scaled(p(1:end-1), p(1:end-1));  
+  v = rand(N,1); v = v/norm(v);
+  v_null = v_null/sqrt(trB);
+  opts.v0 = v - (v_null' * v) * v_null;
+  dA_trnt = decomposition(A_truncated,'chol');
+  Afun = @(x) GinvA_fun(x, dA_trnt, v_null);
+ 
+  opts.dim  = 2 * (N_wanted-1); %Lanczos Subspace Dimension
+  %V = zeros(N-gammaflag, N_wanted-gammaflag);
+ tic;
+  [V, ew, flag] = eigs(Afun, N, N_wanted-1, 'lm', ...
+                   'Tolerance', opts.tol,'MaxIterations', opts.maxit, 'IsFunctionSymmetric', opts.issym, 'StartVector', opts.v0, ...
+                   'SubspaceDimension', opts.dim, 'IsSymmetricDefinite', true);
+  cpu_time = toc;
+ %fprintf('time of eigs is %e \n',cpu_time);
+else
+  gammaflag = 0; opts.dim  = 2 * N_wanted;
+  dA = decomposition(A_scaled,'chol');
+  Afun = @(x) InvA_times_vec(x, dA);
+ tic;
+  [V, ew, flag] = eigs(Afun, N, N_wanted, 'lm', 'Tolerance', opts.tol, 'SubspaceDimension', opts.dim,...
+                  'MaxIterations', opts.maxit, 'IsFunctionSymmetric', opts.issym );
+ cpu_time = toc;
+end
+if any(flag),  error('eigs does not converge'); end   
 omega = 1.0./sqrt(diag(ew));  
 iter_number = iter_count; 
 
-if any(flag),  error('eigs does not converge'); end   
 
 if gammaflag == 1
-    V = V - B_hat_vec.' * V;   
-    V = bsxfun(@times, V, omega.');
-    V = [V; -muz_array(1:end-1)' * V/muz_array(end)]; 
+    %V = V - (trB .\ muz_array(1:end-1)).' * V;
+    %V = bsxfun(@times, V, omega.');
+%     V = [V; -muz_array(1:end-1)' * V/muz_array(end)]; 
     V = [ones(N,1)/sqrt(trB), V];
     omega = [0.0; omega];
-else
-   V = bsxfun(@times, V, omega.');    
+%else
+%   V = bsxfun(@times, V, omega.');
 end
 
 [omega, idx] = sort(omega, 'ascend');  %from small to large eigenvalues
 V = V(:, idx); 
 
+end
+
+function  y = InvA_times_vec(x, dA)
+     global  iter_count
+      y = dA\x;
+     iter_count = iter_count + 1;
+end
+
+function y =  GinvA_fun(x, Asub_decomp, v)
+  global  iter_count
+  y = Asub_decomp\x(1:end-1,:);
+  tmp = v(1:end-1)'*y;
+  tmp = v*tmp;
+  y = [y - tmp(1:end-1,:); tmp(end,:)];
+   iter_count = iter_count + 1;
 end
