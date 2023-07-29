@@ -126,6 +126,6 @@ function y =  GinvA_fun(x, Asub_decomp, v)
   y = Asub_decomp\x(1:end-1,:);
   tmp = v(1:end-1)'*y;
   tmp = v*tmp;
-  y = [y - tmp(1:end-1,:); tmp(end,:)];
+  y = [y - tmp(1:end-1,:); - tmp(end,:)];
    iter_count = iter_count + 1;
 end
